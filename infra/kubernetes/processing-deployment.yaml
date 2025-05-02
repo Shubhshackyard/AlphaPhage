@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processing-deployment
+  labels:
+    app: processing
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: processing
+  template:
+    metadata:
+      labels:
+        app: processing
+    spec:
+      containers:
+      - name: processing
+        image: your-docker-repo/processing:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        - name: DELTA_LAKE_PATH
+          value: "/mnt/delta"
+        - name: SPARK_MASTER
+          value: "spark://spark-master:7077"
+        volumeMounts:
+        - name: delta-storage
+          mountPath: /mnt/delta
+      volumes:
+      - name: delta-storage
+        persistentVolumeClaim:
+          claimName: delta-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: processing-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: processing

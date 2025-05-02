@@ -1,0 +1,15 @@
+requests
+tweepy
+kafka-python
+playwright
+pandas
+python-dotenv
+fastapi
+uvicorn
+pyspark
+delta-spark
+transformers
+torch
+scikit-learn
+numpy
+jsonschema

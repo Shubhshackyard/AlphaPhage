@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alpha-ingestion
+  labels:
+    app: alpha-ingestion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alpha-ingestion
+  template:
+    metadata:
+      labels:
+        app: alpha-ingestion
+    spec:
+      containers:
+      - name: ingestion
+        image: your-docker-repo/alpha-ingestion:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: TWITTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: api_key
+        - name: TWITTER_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: api_secret
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka:9092
+        - name: KAFKA_TOPIC
+          value: tweets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alpha-ingestion
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: alpha-ingestion

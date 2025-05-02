@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-detector
+  labels:
+    app: anomaly-detector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-detector
+  template:
+    metadata:
+      labels:
+        app: anomaly-detector
+    spec:
+      containers:
+      - name: anomaly-detector
+        image: alphaphage/anomaly-detector:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DELTA_BRONZE_PATH
+          value: "/data/delta/bronze/narratives"
+        - name: DELTA_SILVER_PATH
+          value: "/data/delta/silver/narratives"
+        - name: DELTA_GOLD_PATH
+          value: "/data/delta/gold/alerts"
+        - name: ANOMALY_LOOKBACK_DAYS
+          value: "30"
+        - name: ZSCORE_THRESHOLD
+          value: "2.5"
+        - name: ENABLE_WEBHOOK
+          value: "true"
+        - name: WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: webhook-url
+        - name: ENABLE_EMAIL
+          value: "true"
+        - name: EMAIL_RECIPIENTS
+          value: "alerts@example.com"
+        - name: EMAIL_SENDER
+          value: "alphaphage@example.com"
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: smtp-username
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: smtp-password
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DETECTION_INTERVAL_MINUTES
+          value: "60"
+        volumeMounts:
+        - name: delta-storage
+          mountPath: /data/delta
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+      volumes:
+      - name: delta-storage
+        persistentVolumeClaim:
+          claimName: delta-storage-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anomaly-detector
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: anomaly-detector
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-secrets
+type: Opaque
+data:
+  webhook-url: BASE64_ENCODED_WEBHOOK_URL
+  smtp-username: BASE64_ENCODED_SMTP_USERNAME
+  smtp-password: BASE64_ENCODED_SMTP_PASSWORD
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: anomaly-detection-job
+spec:
+  schedule: "0 * * * *"  # Run hourly
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: anomaly-detector
+            image: alphaphage/anomaly-detector:latest
+            command: ["python", "detector.py"]
+            env:
+            - name: DELTA_BRONZE_PATH
+              value: "/data/delta/bronze/narratives"
+            - name: DELTA_SILVER_PATH
+              value: "/data/delta/silver/narratives"
+            - name: DELTA_GOLD_PATH
+              value: "/data/delta/gold/alerts"
+            volumeMounts:
+            - name: delta-storage
+              mountPath: /data/delta
+          volumes:
+          - name: delta-storage
+            persistentVolumeClaim:
+              claimName: delta-storage-pvc
+          restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alert-notification-job
+spec:
+  schedule: "*/15 * * * *"  # Run every 15 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: alert-generator
+            image: alphaphage/anomaly-detector:latest
+            command: ["python", "alert_generator.py"]
+            env:
+            - name: DELTA_GOLD_PATH
+              value: "/data/delta/gold/alerts"
+            - name: ENABLE_WEBHOOK
+              value: "true"
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: notification-secrets
+                  key: webhook-url
+            - name: ENABLE_EMAIL
+              value: "true"
+            - name: EMAIL_RECIPIENTS
+              value: "alerts@example.com"
+            volumeMounts:
+            - name: delta-storage
+              mountPath: /data/delta
+          volumes:
+          - name: delta-storage
+            persistentVolumeClaim:
+              claimName: delta-storage-pvc
+          restartPolicy: OnFailure

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alphaphage-api
+  labels:
+    app: alphaphage-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alphaphage-api
+  template:
+    metadata:
+      labels:
+        app: alphaphage-api
+    spec:
+      containers:
+      - name: api
+        image: alphaphage/api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DELTA_BRONZE_PATH
+          value: "/data/delta/bronze/narratives"
+        - name: DELTA_SILVER_PATH
+          value: "/data/delta/silver/narratives"
+        - name: DELTA_GOLD_PATH
+          value: "/data/delta/gold/alerts"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: CORS_ORIGINS
+          value: "*"
+        - name: WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-secrets
+              key: webhook-url
+              optional: true
+        # Mount Delta Lake volume
+        volumeMounts:
+        - name: delta-storage
+          mountPath: /data/delta
+        # Add health check
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "0.5"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+      volumes:
+      - name: delta-storage
+        persistentVolumeClaim:
+          claimName: delta-storage-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alphaphage-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+  selector:
+    app: alphaphage-api

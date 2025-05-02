@@ -1,0 +1,14 @@
+numpy
+pyspark
+delta-spark
+kafka-python
+pandas
+pyarrow
+fastapi
+uvicorn
+transformers
+torch
+scikit-learn
+requests
+pytest
+loguru
