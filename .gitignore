@@ -1,1 +1,31 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Node
+node_modules/
+npm-debug.log
+
+# IDE
+.idea/
+.vscode/
+
+# OS
 .DS_Store
+
+# Data directories
+/data/
+
+# Spark
+metastore_db/
+derby.log
